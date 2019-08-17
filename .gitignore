@@ -1,0 +1,11 @@
+config/*cfg.py
+
+venv/
+.idea/
+mytest
+
+.DS*s
+*.pyc
+*.bak
+*.swp
+*.idea
