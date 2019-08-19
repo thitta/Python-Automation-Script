@@ -4,6 +4,8 @@ venv/
 .idea/
 mytest
 
+/bash
+
 .DS*s
 *.pyc
 *.bak
