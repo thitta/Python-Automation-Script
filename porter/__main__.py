@@ -1,4 +1,4 @@
-from .run import PorterScript
+from .core import main
 
 if __name__ == "__main__":
-    PorterScript().run()
+    main()

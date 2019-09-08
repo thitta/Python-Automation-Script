@@ -1,79 +1,104 @@
-import argparse
 import functools
-import sys
+import inspect
 import time
-from builtins import NotImplementedError
+from collections import namedtuple
 
 from utility.print_utility import *
 
+_context = {}
 
-class AutomationScript:
-    script_name: str = "Undefined script"
-    confirm_message: str = "Empty confirm message"
-    confirm_flag: bool = True
-    report_message: str = None
-
-    def init_check(self):
-        raise NotImplementedError()
-
-    def body(self):
-        raise NotImplementedError()
-
-    def run(self):
-
-        # implement -nc option
-        self._set_confirm_flag_by_args()
-
-        # execute init check
-        self.init_check()
-
-        # print init message
-        print_init_message(self.script_name)
-
-        # execute confirm if necessary
-        if self.confirm_flag is True:
-            self._confirm()
-
-        # execute body
-        self.body()
-
-        # end message
-        print_end_message(self.script_name)
-
-        # print report message if necessary
-        if self.report_message is not None:
-            print(self.report_message)
-        print_newline()
-
-    def disable_confirm(self):
-        self.confirm_flag = False
-        return self
-
-    def _confirm(self):
-        print(self.confirm_message)
-        print_newline()
-        option_msg = "Press [y/N] to proceed..."
-        if input(option_msg).lower().strip() != "y":
-            print("ByeBye~")
-            sys.exit()
-        print_newline()
-
-    def _set_confirm_flag_by_args(self):
-        parser = argparse.ArgumentParser()
-        parser.add_argument("-nc", action="store_true", help="Skip confirm of the script")
-        self.confirm_flag = False if parser.parse_args().nc is True else self.confirm_flag
+NextStep = namedtuple("TaskReturn", ("runnable", "context"))
 
 
-def print_proc_report(proc_description):
-    def arg_wrapper(func):
+def decorator(func):
+    return func
+
+
+@decorator
+def procedure(message: str = None, *, user_input: bool = False, show_time: bool = False):
+    """
+    Decorator for a procedure in automation script
+
+    the decorated function is expected to...
+    - provide "user_input" param to accept user's input if the `use_input` is True
+    - provide arbitrary key-words params
+    - return a NextStep object
+
+    :param message: prompt message
+    :param user_input: if true, the message will be printed by input()
+    :param show_time: if true, print execution time to the console
+    """
+
+    def decorator_wrapper(func):
+
         @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            print(f"{proc_description}......")
-            now = time.time()
-            func(*args, **kwargs)
-            print(f"ok({round(time.time() - now, 2)} sec)")
-            print_newline()
+        def func_wrapper():
+            # print message or ask for input
+            if user_input is True and message is not None:
+                _context["user_input"] = input(message)
+            else:
+                if message is not None:
+                    print(message)
+            # execute
+            try:
+                start_time = time.time()
+                next_step: NextStep = inject_context_and_run(func, _context)
+                end_time = time.time()
+            except Exception as e:
+                raise (e)
+            else:
+                if show_time is True:
+                    print(f" ok({round(end_time - start_time, 2)} sec)")
+                # update context
+                _context.update(next_step.context)
+                print_newline()
+                # run next step if exists
+                if next_step.runnable is not None:
+                    next_step.runnable()
+                # or execute teardown
+                else:
+                    for runnable in _teardown:
+                        try:
+                            inject_context_and_run(runnable, _context)
+                        except Exception:
+                            pass
 
-        return wrapper
+        return func_wrapper
 
-    return arg_wrapper
+    return decorator_wrapper
+
+
+_teardown = []
+
+
+@decorator
+def teardown(func):
+    """
+    registered function into _teardown array
+
+    all the registered functions will be executed when the script ends
+    """
+    _teardown.append(func)
+
+    @functools.wraps(func)
+    def wrapper():
+        func()
+
+    return wrapper
+
+
+def inject_context_and_run(runnable, context):
+    try:
+        args = (context[key] for key in inspect.getfullargspec(runnable).args)
+        return runnable(*args)
+    except KeyError:
+        msg = (
+            f"can't inject context into function when calling {runnable.__name__}()\n"
+            f"  function args: {inspect.getfullargspec(runnable).args}\n"
+            f"  context keys: {list((key for key in _context.keys()))}\n"
+        )
+        raise DecoratorError(msg)
+
+
+class DecoratorError(Exception):
+    pass

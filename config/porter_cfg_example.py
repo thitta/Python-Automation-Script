@@ -1,7 +1,15 @@
-from typing import Iterable
+import collections
 
-from porter import PorterTask
+from utility import FileUtility
 
-TASKS: Iterable[PorterTask] = ()
+COMPRESS_FORMAT = "zip"
 
-DESTINATION_DIRPATH: str = ""
+EXPORT_FILENAME = f"Porter {FileUtility.get_datetime_stamp()}.{COMPRESS_FORMAT}"
+
+DESTINATION_DIRPATH = "[the destination directory you wish to put your zip file in]"
+
+PorterTask = collections.namedtuple("PorterTasks", ("src_dirpath", "ignore_patterns"))
+
+TASKS = (
+    # PorterTask("[source directory], [Iterable of strings, the pattern you wish to ignore]"),
+)
