@@ -1,6 +1,7 @@
 import argparse
 import os
 import shutil
+import uuid
 from pathlib import Path
 
 from config.porter_cfg import COMPRESS_FORMAT, EXPORT_FILENAME, DESTINATION_DIRPATH, TASKS
@@ -12,7 +13,6 @@ def main():
     print("------------------------------------------------------------")
     print("Porter script")
     print("------------------------------------------------------------")
-
     init_check()
 
 
@@ -45,8 +45,12 @@ def confirm(user_input):
 
 @procedure("Creating staging directory...", show_time=True)
 def create_staging_dir():
-    staging_dirpath = os.path.join(str(Path.home()), "backup_tmp")
-    os.makedirs(staging_dirpath, exist_ok=False)
+    while True:
+        hash_id = uuid.uuid1().hex[0:8]
+        staging_dirpath = os.path.join(str(Path.home()), f"backup_{hash_id}")
+        if os.path.isdir(staging_dirpath) is False:
+            os.makedirs(staging_dirpath, exist_ok=False)
+            break
     context = dict()
     context["staging_dirpath"] = staging_dirpath
     return NextStep(collect_files, context=context)
@@ -57,7 +61,7 @@ def collect_files(staging_dirpath):
     for task in TASKS:
         basename = os.path.basename(task.src_dirpath)
         shutil.copytree(task.src_dirpath, os.path.join(staging_dirpath, basename),
-                        ignore=shutil.ignore_patterns(*task.ignore_patterns))
+                        ignore=shutil.ignore_patterns(*task.ignore_patterns), symlinks=True)
     return NextStep(zip_files, {})
 
 
